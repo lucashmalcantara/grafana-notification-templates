@@ -1,0 +1,113 @@
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.alert_severity_prefix_emoji" -}}
+  {{- $priority := . -}}
+  {{- if eq $priority "p0" -}}
+    :rotating_light:
+  {{- else if eq $priority "p1" -}}
+    :warning:
+  {{- else -}}
+    :bell:
+  {{- end -}}
+{{- end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.priority_prefix" }}{{- $priority := . -}}{{ if $priority }} [Priority: {{ $priority }}]{{ end }}{{ end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.title_prefix" }}{{ if eq .Status "firing" }}{{ template "slack_v1.alert_severity_prefix_emoji" .CommonLabels.priority }}{{ template "slack_v1.priority_prefix" .CommonLabels.priority }}{{ else }}:white_check_mark:{{ end }} {{ end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.title" }}{{ template "slack_v1.title_prefix" . }}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}: {{ .Alerts.Firing | len }}{{ if gt (.Alerts.Resolved | len) 0 }}, RESOLVED: {{ .Alerts.Resolved | len }}{{ end }}{{ end }}]{{ if .CommonLabels.alertname }} {{ .CommonLabels.alertname }}{{ else }} {{ range $index, $pair := .GroupLabels.SortedPairs }}{{ if $index }}, {{ end }}{{ $pair.Name }}: {{ $pair.Value }}{{ end }}{{ if gt (len .CommonLabels) (len .GroupLabels) }} ({{ with .CommonLabels.Remove .GroupLabels.Names }}{{ range $index, $pair := .SortedPairs }}{{ if $index }}, {{ end }}{{ $pair.Name }}: {{ $pair.Value }}{{ end }}{{ end }}){{ end }}{{ end }}{{ end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_alert_name" }}{{ range .Labels.SortedPairs }}{{ if eq .Name "alertname" }}{{ .Value }}{{ end }}{{ end }}{{ end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_alert_prefix" }}{{ if eq .Status "firing" }}{{ template "slack_v1.alert_severity_prefix_emoji" .Labels.priority }}{{ template "slack_v1.priority_prefix" .Labels.priority }}{{ else }}:white_check_mark:{{ end }} {{ end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_alert_name_block" }}{{ template "slack_v1.text_alert_prefix" . }}{{ template "slack_v1.text_alert_name" . }}{{ end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_alert_summary" -}}
+*Summary:*
+{{ range .Annotations.SortedPairs }}{{ if eq .Name "summary" }}{{ .Value }}{{ end }}{{ end }}
+{{- end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_alert_description" -}}
+*Description:*
+{{ range .Annotations.SortedPairs }}{{ if eq .Name "description" }}{{ .Value }}{{ end }}{{ end }}
+{{- end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_alert_runbook_url" }}{{ range .Annotations.SortedPairs }}{{ if eq .Name "runbook_url" }}:bookmark_tabs: <{{ .Value }}|Runbook>{{ end }}{{ end }}{{ end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_values_list" -}}
+*Value:*
+{{ if len .Values }}{{ $first := true }}{{ range $refID, $value := .Values}}{{ if $first }}{{ $first = false }}{{ else }}, {{ end }}{{ $refID }}={{ $value }}{{ end }}{{ else }}[no value]{{ end }}
+{{- end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_actions" -}}
+*Actions:*
+{{- if gt (len .DashboardURL) 0 }}
+:bar_chart: <{{ .DashboardURL }}|Go to dashboard>
+{{- end }}
+{{- if gt (len .PanelURL) 0 }}
+:chart_with_upwards_trend: <{{ .PanelURL }}|Go to panel>
+{{- end }}
+{{- if gt (len .GeneratorURL) 0 }}
+:arrow_right: <{{ .GeneratorURL }}|Go to alert>
+{{- end }}
+{{- if and (eq .Status "firing") (gt (len .SilenceURL) 0) }}
+:mute: <{{ .SilenceURL }}|Silence alert>
+{{- end }}
+{{ template "slack_v1.text_alert_runbook_url" . }}
+{{- end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_labels" -}}
+*Labels:*
+{{- range .Labels.SortedPairs }}
+  {{- if ne .Name "alertname" }}
+  {{- if ne .Name "ref_id" }}
+  {{- if ne .Name "datasource_uid" }}
+  {{- if ne .Name "rule_uid" }}
+- {{ .Name }} = {{ .Value }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+{{- end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_alert_firing_item" }}
+
+{{ template "slack_v1.text_alert_name_block" . }}
+
+{{ template "slack_v1.text_alert_summary" . }}
+
+{{ template "slack_v1.text_alert_description" . }}
+
+{{ template "slack_v1.text_actions" . }}
+
+{{ template "slack_v1.text_labels" . }}
+
+{{ template "slack_v1.text_values_list" . }}
+{{ end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_alert_resolved_item" }}
+
+{{ template "slack_v1.text_alert_name_block" . }}
+
+{{ template "slack_v1.text_alert_summary" . }}
+
+{{ template "slack_v1.text_alert_description" . }}
+
+{{ template "slack_v1.text_actions" . }}
+
+{{ template "slack_v1.text_labels" . }}
+
+{{ template "slack_v1.text_values_list" . }}
+{{ end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_alert_list_firing" }}{{ range . }}{{ template "slack_v1.text_alert_firing_item" . }}{{ end }}{{ end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.text_alert_list_resolved" }}{{ range . }}{{ template "slack_v1.text_alert_resolved_item" . }}{{ end }}{{ end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
+{{ define "slack_v1.message" }}
+{{ if gt (len .Alerts.Firing) 0 }}{{ .Alerts.Firing | len }} Firing{{ template "slack_v1.text_alert_list_firing" .Alerts.Firing }}{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}{{ .Alerts.Resolved | len }} Resolved{{ template "slack_v1.text_alert_list_resolved" .Alerts.Resolved }}{{ end }}
+{{- end }}
+{{- /* ------------------------------------------------------------------------------------------------------------- */ -}}
